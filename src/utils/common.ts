@@ -31,6 +31,16 @@ export const timeStringToSeconds = (time: string): number => {
   throw new Error('Invalid time format');
 }
 
+export const isSameDay = (date1: Date, date2: Date): boolean => {
+  return date1.getFullYear() === date2.getFullYear() &&
+         date1.getMonth() === date2.getMonth() &&
+         date1.getDate() === date2.getDate();
+}
+
+export const isBeetweenDates = (date: Date, start: Date, end: Date): boolean => {
+  return date >= start && date <= end;
+}
+
 export const detectAudioFormat = (mimeType: string | undefined): StreamType => {
   if (!mimeType) return StreamType.Arbitrary;
   const mt = mimeType.toLowerCase();
