@@ -1,7 +1,7 @@
 import { Client, ActivityType, ChannelType, ActivityOptions } from 'discord.js';
 import { servers } from '@/servers';
 import { LunarFestival } from '@/enums';
-import { isSameDay, isBeetweenDates } from '@/utils';
+import { isSameDay, isBeetweenDates, shuffle } from '@/utils';
 import messages from '@/constants/messages';
 
 export class ActivitySerivce {
@@ -75,10 +75,12 @@ export class ActivitySerivce {
       return baseActivities;
     };
 
+    let queue = shuffle(await activities()); 
     setInterval(async () => {
-      const list = await activities();
-      const randomIndex = Math.floor(Math.random() * list.length);
-      this.client.user?.setActivity(list[randomIndex]);
+      if (queue.length === 0) {
+        queue = shuffle(await activities());
+      }
+      this.client.user?.setActivity(queue.shift());
     }, this.interval);
   }
 
