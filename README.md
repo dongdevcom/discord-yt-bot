@@ -33,8 +33,8 @@ A Discord bot for playing music from YouTube (and SoundCloud) in your server’s
 3. **Configure environment variables**
    - Copy `.env.example` to `.env` and fill in your bot token and other required values
 
-4. **Add YouTube cookies**
-   - Use [Cookie-Editor](https://github.com/moustachauve/cookie-editor) to export your YouTube cookies and save them as `cookies.txt` in the project root
+4. **Add YouTube cookie**
+   - Use [Cookie-Editor](https://github.com/moustachauve/cookie-editor) to export your YouTube cookie and save them as `cookie.txt` in the project root
 
 5. **Build and run with Docker Compose**
    ```

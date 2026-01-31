@@ -17,7 +17,7 @@ services:
       dockerfile: ./Dockerfile
     volumes:
       - ./.env:/app/.env
-      - ./cookies.txt:/app/cookies.txt
+      - ./cookie.txt:/app/cookie.txt
     dns:
       - 1.1.1.1
       - 8.8.8.8
