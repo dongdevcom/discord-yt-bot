@@ -8,8 +8,7 @@ import {
 } from 'youtubei.js';
 import type { SabrPlaybackOptions } from 'googlevideo/sabr-stream';
 import { EnabledTrackTypes } from 'googlevideo/utils';
-import { createAudioResource, AudioResource, StreamType } from '@discordjs/voice';
-
+import { createAudioResource, AudioResource } from '@discordjs/voice';
 import { Platform } from '@/enums';
 import {
   IMusicService,
@@ -52,8 +51,7 @@ export class YoutubeService implements IMusicService {
 
       this.innertube = await Innertube.create({
         cookie,
-        cache: new UniversalCache(true),
-        generate_session_locally: true
+        cache: new UniversalCache(true)
       });
     }
     return this.innertube;
@@ -67,7 +65,8 @@ export class YoutubeService implements IMusicService {
       enabledTrackTypes: EnabledTrackTypes.AUDIO_ONLY
     };
 
-    const { streamResults } = await createSabrStream(song.id, options);
+    const innertube = await this.createInnerTubeAsync();
+    const { streamResults } = await createSabrStream(innertube, song.id, options);
     const { audioStream, selectedFormats } = streamResults;
 
     const nodeReadable = Readable.fromWeb(audioStream as NodeReadableStream);

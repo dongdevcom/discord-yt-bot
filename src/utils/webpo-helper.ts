@@ -1,48 +1,86 @@
-import { BG, type BgConfig } from 'bgutils-js';
+import { Innertube } from 'youtubei.js';
 import { JSDOM } from 'jsdom';
+import { BG, buildURL, GOOG_API_KEY, USER_AGENT } from "bgutils-js";
+const userAgent = USER_AGENT;
 
-export async function generateWebPoToken(contentBinding: string) {
-  const requestKey = 'O43z0dpjhgX20SCx4KAo';
+export interface PoTokenResult {
+  visitorData: string;
+  sessionPoToken: string;
+  poToken: string;
+}
 
-  if (!contentBinding)
-    throw new Error('Could not get visitor data');
+export async function generateWebPoToken(innertube: Innertube, videoId: string): Promise<PoTokenResult> {
+  // @NOTE: Session cache is disabled so we can get a fresh visitor data string.
+  // const innertube = await Innertube.create({ user_agent: userAgent, enable_session_cache: false });
+  const visitorData = innertube.session.context.client.visitorData || '';
 
-  const dom = new JSDOM();
+  const dom = new JSDOM('<!DOCTYPE html><html lang="en"><head><title></title></head><body></body></html>', {
+    url: 'https://www.youtube.com/',
+    referrer: 'https://www.youtube.com/',
+    userAgent
+  });
 
   Object.assign(globalThis, {
     window: dom.window,
-    document: dom.window.document
+    document: dom.window.document,
+    location: dom.window.location,
+    origin: dom.window.origin
   });
 
-  const bgConfig: BgConfig = {
-    fetch: (input: string | URL | globalThis.Request, init?: RequestInit) => fetch(input, init),
-    globalObj: globalThis,
-    identifier: contentBinding,
-    requestKey
-  };
+  if (!Reflect.has(globalThis, 'navigator')) {
+    Object.defineProperty(globalThis, 'navigator', { value: dom.window.navigator });
+  }
 
-  const bgChallenge = await BG.Challenge.create(bgConfig);
-
-  if (!bgChallenge)
+  const challengeResponse = await innertube.getAttestationChallenge('ENGAGEMENT_TYPE_UNBOUND');
+  if (!challengeResponse.bg_challenge) {
     throw new Error('Could not get challenge');
+  }
 
-  const interpreterJavascript = bgChallenge.interpreterJavascript.privateDoNotAccessOrElseSafeScriptWrappedValue;
+  const interpreterUrl = challengeResponse.bg_challenge.interpreter_url.private_do_not_access_or_else_trusted_resource_url_wrapped_value;
+  const bgScriptResponse = await fetch(`https:${interpreterUrl}`);
+  const interpreterJavascript = await bgScriptResponse.text();
 
   if (interpreterJavascript) {
     new Function(interpreterJavascript)();
-  } else throw new Error('Could not load VM');
+  } else {
+    throw new Error('Could not load VM');
+  }
 
-  const poTokenResult = await BG.PoToken.generate({
-    program: bgChallenge.program,
-    globalName: bgChallenge.globalName,
-    bgConfig
+  const botguard = await BG.BotGuardClient.create({
+    program: challengeResponse.bg_challenge.program,
+    globalName: challengeResponse.bg_challenge.global_name,
+    globalObj: globalThis
   });
 
-  const coldStartToken = BG.PoToken.generateColdStartToken(contentBinding);
+  const webPoSignalOutput: any[] = [];
+  const botguardResponse = await botguard.snapshot({ webPoSignalOutput });
+  const requestKey = 'O43z0dpjhgX20SCx4KAo';
+
+  const integrityTokenResponse = await fetch(buildURL('GenerateIT', true), {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json+protobuf',
+      'x-goog-api-key': GOOG_API_KEY,
+      'x-user-agent': 'grpc-web-javascript/0.1',
+      'user-agent': userAgent
+    },
+    body: JSON.stringify([requestKey, botguardResponse])
+  });
+
+  const response = await integrityTokenResponse.json();
+
+  if (typeof response[0] !== 'string') {
+    throw new Error('Could not get integrity token');
+  }
+
+  const integrityTokenBasedMinter = await BG.WebPoMinter.create({ integrityToken: response[0] }, webPoSignalOutput);
+
+  const contentPoToken = await integrityTokenBasedMinter.mintAsWebsafeString(videoId);
+  const sessionPoToken = await integrityTokenBasedMinter.mintAsWebsafeString(visitorData);
 
   return {
-    visitorData: contentBinding,
-    coldStartToken,
-    poToken: poTokenResult.poToken,
+    visitorData,
+    sessionPoToken,
+    poToken: contentPoToken,
   };
 }
