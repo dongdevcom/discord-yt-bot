@@ -1,16 +1,17 @@
-FROM node:alpine AS environment
-RUN apk add --no-cache ffmpeg
-
-FROM environment AS build
+FROM node:25-alpine AS base
 WORKDIR /app
-COPY . ./
-RUN npm install
+
+FROM base AS build
+COPY package*.json ./
+RUN npm ci
+COPY . .
 RUN npm run build
+RUN npm prune --omit=dev
 
-FROM environment AS production
+FROM base AS production
 WORKDIR /app
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/package*.json ./
 ENV NODE_ENV=production
-RUN npm install --omit=dev
-ENTRYPOINT ["npm", "run", "start"]
+CMD ["npm", "run", "start"]
