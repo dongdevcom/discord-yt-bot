@@ -2,7 +2,6 @@ import { Platform } from '@/enums';
 import {
   IMusicService,
   IPlaylist,
-  IPlaylistCache,
   ISong
 } from '@/types';
 import {
@@ -13,19 +12,12 @@ import {
   SOUNDCLOUD_CLIENT_ID,
   SOUNDCLOUD_OAUTH_TOKEN
 } from '@/constants/config';
-import {
-  CacheSerivce,
-  RedisService
-} from '@/services'
 import messages from '@/constants/messages';
 import { Soundcloud, SoundcloudTrack } from 'soundcloud.ts';
 import { createAudioResource, AudioResource, StreamType } from '@discordjs/voice';
 
 export class SoundCloudService implements IMusicService {
   private soundcloud: Soundcloud = new Soundcloud(SOUNDCLOUD_CLIENT_ID, SOUNDCLOUD_OAUTH_TOKEN);
-  private redis: RedisService = new RedisService();
-  private songCache: CacheSerivce = new CacheSerivce('sc:song', 24 * 60);
-  private playlistCache: CacheSerivce = new CacheSerivce('sc:playlist', 24 * 60);
 
   public async createAudioResource(song: ISong): Promise<AudioResource> {
     const stream = await this.soundcloud.util.streamTrack(song.url);
@@ -33,10 +25,6 @@ export class SoundCloudService implements IMusicService {
   }
 
   public async getPlaylistAsync(url: string): Promise<IPlaylist> {
-    const playlistId = this.getPlaylistId(url) || url;
-    const cached = await this.redis.getAsync(this.playlistCache.key(playlistId));
-    if (cached) return await this.getPlaylistFromCacheAsync(cached as IPlaylistCache);
-
     const result = await this.soundcloud.playlists.getAlt(url);
     if (result.tracks.length === 0) throw new Error(messages.playlistNotFound);
 
@@ -51,27 +39,16 @@ export class SoundCloudService implements IMusicService {
         platform: Platform.SOUNDCLOUD
       }
     ));
-
-    const playlist: IPlaylistCache = {
+    return <IPlaylist>{
       id: this.getPlaylistId(result.permalink_url) ?? result.permalink_url,
       title: result.title,
       thumbnail: result.artwork_url ?? songs.at(0)?.thumbnail ?? '',
       author: result.user.full_name,
-      ids: []
+      songs
     };
-    for (const song of songs) {
-      playlist.ids.push(song.id);
-      await this.redis.setAsync(this.songCache.key(song.id), song, this.songCache.ttl());
-    }
-    await this.redis.setAsync(this.playlistCache.key(playlist.id), playlist, this.playlistCache.ttl());
-    return await this.getPlaylistFromCacheAsync(playlist);
   }
 
   public async getSongAsync(url: string): Promise<ISong> {
-    const trackId = this.getTrackId(url) || url;
-    const cached = await this.redis.getAsync(this.songCache.key(trackId));
-    if (cached) return cached as ISong;
-
     const result = await this.soundcloud.tracks.get(url);
     if (!result) throw new Error(messages.songNotFound);
 
@@ -84,7 +61,6 @@ export class SoundCloudService implements IMusicService {
       url: result.permalink_url,
       platform: Platform.SOUNDCLOUD
     };
-    await this.redis.setAsync(this.songCache.key(song.id), song, this.songCache.ttl());
     return song;
   }
 
@@ -104,16 +80,7 @@ export class SoundCloudService implements IMusicService {
       url: track.permalink_url,
       platform: Platform.SOUNDCLOUD
     };
-    await this.redis.setAsync(this.songCache.key(song.id), song, this.songCache.ttl());
     return song;
-  }
-
-  private async getPlaylistFromCacheAsync(cached: IPlaylistCache): Promise<IPlaylist> {
-    const playlist: IPlaylist = { ...cached, songs: [] };
-    for (const id of cached.ids) {
-      playlist.songs.push(await this.getSongAsync(id));
-    }
-    return playlist;
   }
 
   private getPlaylistId(url: string): string | null | undefined {

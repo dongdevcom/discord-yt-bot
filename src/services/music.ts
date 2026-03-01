@@ -11,8 +11,16 @@ import { SoundCloudService } from '@/services/soundcloud';
 import {  AudioResource } from '@discordjs/voice';
 
 export class MusicService {
-  private youtube: YoutubeService = new YoutubeService();
-  private soundcloud: SoundCloudService = new SoundCloudService();
+  private youtube: YoutubeService | null | undefined;
+  private soundcloud: SoundCloudService | null | undefined;
+
+  constructor(
+    youtube: YoutubeService | null | undefined,
+    soundcloud: SoundCloudService | null | undefined
+  ) {
+    this.youtube = youtube;
+    this.soundcloud = soundcloud;
+  }
 
   public createAudioResource(song: ISong): Promise<AudioResource> {
     const plugin = this.getPluginByPlatform(song.platform);
@@ -42,23 +50,30 @@ export class MusicService {
   }
 
   private getPluginByPlatform(platform: Platform): IMusicService {
+    let plugin = null;
     switch (platform) {
       case Platform.SOUNDCLOUD:
-        return this.soundcloud;
+        plugin = this.soundcloud;
+        break;
       case Platform.YOUTUBE:
       default:
-        return this.youtube;
+        plugin = this.youtube;
     }
+    if (!plugin) {
+      throw new Error(`Plugin for platform ${platform} not initialized`);
+    }
+    return plugin;
   }
 
   private getPluginByMediaType(types: MediaType[], platform: Platform = Platform.YOUTUBE): IMusicService {
+    let plugin = null;
     if (this.hasType(types, [MediaType.SoundCloudPlaylist, MediaType.SoundCloudTrack])) {
-      return this.soundcloud;
+      plugin = this.soundcloud;
     }
     if (this.hasType(types, [MediaType.YouTubePlaylist, MediaType.YouTubeVideo])) {
-      return this.youtube;
+      plugin = this.youtube;
     }
-    return platform == Platform.SOUNDCLOUD ? this.soundcloud : this.youtube;
+    return plugin ?? this.getPluginByPlatform(platform);
   }
 
   private detectMediaTypes(url: string): MediaType[] {

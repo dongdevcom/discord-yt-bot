@@ -1,7 +1,7 @@
+import { config } from 'dotenv';
+config({ quiet: true, debug: process.env.DEBUG === 'true' });
 import { Client, GatewayIntentBits } from 'discord.js';
 import { generateDependencyReport } from '@discordjs/voice';
-import { config } from 'dotenv';
-config();
 import { BOT_TOKEN } from '@/constants/config';
 import { run } from '@/commands';
 import { messageEvent } from '@/messages';

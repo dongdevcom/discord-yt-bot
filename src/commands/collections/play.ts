@@ -57,7 +57,8 @@ export const play = {
       const normalizedPlatform = inputPlatform?.toUpperCase() as keyof typeof Platform;
       const platform = Platform[normalizedPlatform] ?? Platform.YOUTUBE;
 
-      const result = await server.getMusicService().getAsync(input, platform);
+      const service = await server.getMusicService();
+      const result = await service.getAsync(input, platform);
       const requester = interaction.member?.user.username ?? '';
 
       let payload: any = { platform, requester };

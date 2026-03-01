@@ -10,51 +10,51 @@ import type { SabrPlaybackOptions } from 'googlevideo/sabr-stream';
 import { EnabledTrackTypes } from 'googlevideo/utils';
 import { createAudioResource, AudioResource } from '@discordjs/voice';
 import { Platform } from '@/enums';
+import { SabrService } from '@/services';
 import {
   IMusicService,
   IPlaylist,
-  IPlaylistCache,
   ISong
 } from '@/types';
 import { youtubePlaylistRegex, youtubeVideoRegex } from '@/constants/regex'
-import { CacheSerivce, RedisService } from '@/services'
 import messages from '@/constants/messages';
 import {
   timeStringToSeconds,
   getCookie,
-  detectAudioFormat,
-  createSabrStream
+  detectAudioFormat
 } from '@/utils';
 
 
 export class YoutubeService implements IMusicService {
-  private innertube: Innertube | null | undefined;
-  private redis: RedisService = new RedisService();
-  private songCache: CacheSerivce = new CacheSerivce('yt:song', 24 * 60);
-  private playlistCache: CacheSerivce = new CacheSerivce('yt:playlist', 24 * 60);
+  private innertube: Innertube;
+  private sabrService: SabrService;
 
-  private async createInnerTubeAsync(): Promise<Innertube> {
-    if (!this.innertube) {
-      const cookie = await getCookie();
+  constructor(innertube: Innertube, sabrService: SabrService) {
+    this.innertube = innertube;
+    this.sabrService = sabrService;
+  }
 
-      InnertubePlatform.shim.eval = async (data: Types.BuildScriptResult, env: Record<string, Types.VMPrimative>) => {
-        const properties = [];
-        if (env.n) {
-          properties.push(`n: exportedVars.nFunction("${env.n}")`)
-        }
-        if (env.sig) {
-          properties.push(`sig: exportedVars.sigFunction("${env.sig}")`)
-        }
-        const code = `${data.output}\nreturn { ${properties.join(', ')} }`;
-        return new Function(code)();
-      };
+  static async create() {
+    InnertubePlatform.shim.eval = async (data: Types.BuildScriptResult, env: Record<string, Types.VMPrimative>) => {
+      const properties = [];
+      if (env.n) {
+        properties.push(`n: exportedVars.nFunction("${env.n}")`)
+      }
+      if (env.sig) {
+        properties.push(`sig: exportedVars.sigFunction("${env.sig}")`)
+      }
+      const code = `${data.output}\nreturn { ${properties.join(', ')} }`;
+      return new Function(code)();
+    };
 
-      this.innertube = await Innertube.create({
-        cookie,
-        cache: new UniversalCache(true)
-      });
-    }
-    return this.innertube;
+    const cookie = await getCookie();
+    const innertube = await Innertube.create({
+      cookie,
+      cache: new UniversalCache(true)
+    });
+;
+    const sabrService = new SabrService(innertube);
+    return new YoutubeService(innertube, sabrService);
   }
 
   public async createAudioResource(song: ISong): Promise<AudioResource> {
@@ -65,9 +65,7 @@ export class YoutubeService implements IMusicService {
       enabledTrackTypes: EnabledTrackTypes.AUDIO_ONLY
     };
 
-    const innertube = await this.createInnerTubeAsync();
-    const { streamResults } = await createSabrStream(innertube, song.id, options);
-    const { audioStream, selectedFormats } = streamResults;
+    const { audioStream, selectedFormats } = await this.sabrService.createSabrStream(song.id, options);
 
     const nodeReadable = Readable.fromWeb(audioStream as NodeReadableStream);
     const inputType = detectAudioFormat(selectedFormats?.audioFormat?.mimeType);
@@ -76,22 +74,18 @@ export class YoutubeService implements IMusicService {
 
   public async getPlaylistAsync(url: string): Promise<IPlaylist> {
     const playlistId = this.getPlaylistId(url) || url;
-    const cached = await this.redis.getAsync(this.playlistCache.key(playlistId));
-    if (cached) return await this.getPlaylistFromCacheAsync(cached as IPlaylistCache);
 
-    const innertube = await this.createInnerTubeAsync();
-    let response = await innertube.getPlaylist(playlistId);
+    let response = await this.innertube.getPlaylist(playlistId);
     if (!response) throw new Error(messages.playlistNotFound);
 
-    const playlist: IPlaylistCache = {
+    const playlist: IPlaylist = {
       id: playlistId,
       title: response.info.title!,
       thumbnail: response.info.thumbnails?.at(0)?.url!,
       author: response.info.author.name!,
-      ids: []
+      songs: []
     };
     let continuation = false;
-
     do {
       const songs: ISong[] = response.items.map((item: any) => (
         <ISong>{
@@ -104,28 +98,19 @@ export class YoutubeService implements IMusicService {
           platform: Platform.YOUTUBE
         }
       ));
-      for (const song of songs) {
-        playlist.ids.push(song.id);
-        await this.redis.setAsync(this.songCache.key(song.id), song, this.songCache.ttl());
-      }
-
+      playlist.songs.push(...songs);
       continuation = response.has_continuation;
       if (continuation) {
         response = await response.getContinuation();
       }
     } while (continuation);
-
-    await this.redis.setAsync(this.playlistCache.key(playlist.id), playlist, this.playlistCache.ttl());
-    return await this.getPlaylistFromCacheAsync(playlist);
+    return playlist;
   }
 
   public async getSongAsync(url: string): Promise<ISong> {
     const videoId = this.getVideoId(url) || url;
-    const cached = await this.redis.getAsync(this.songCache.key(videoId));
-    if (cached) return cached as ISong;
 
-    const innertube = await this.createInnerTubeAsync();
-    const response = await innertube.getBasicInfo(videoId);
+    const response = await this.innertube.getBasicInfo(videoId);
     if (!response) throw new Error(messages.songNotFound);
 
     const song: ISong = {
@@ -137,13 +122,11 @@ export class YoutubeService implements IMusicService {
       url: this.getUrlFromId(response.basic_info.id!),
       platform: Platform.YOUTUBE
     };
-    await this.redis.setAsync(this.songCache.key(song.id), song, this.songCache.ttl());
     return song;
   }
 
   public async searchAsync(query: string): Promise<ISong> {
-    const innertube = await this.createInnerTubeAsync();
-    const response = await innertube.search(query, { type: 'video' });
+    const response = await this.innertube.search(query, { type: 'video' });
     if (response.results.length === 0) throw new Error(`${messages.searchNotFound} ${query}`);
 
     const video = response.results.at(0) as any;
@@ -158,16 +141,7 @@ export class YoutubeService implements IMusicService {
       url: this.getUrlFromId(video.video_id),
       platform: Platform.YOUTUBE
     };
-    await this.redis.setAsync(this.songCache.key(song.id), song, this.songCache.ttl());
     return song;
-  }
-
-  private async getPlaylistFromCacheAsync(cached: IPlaylistCache): Promise<IPlaylist> {
-    const playlist: IPlaylist = { ...cached, songs: [] };
-    for (const id of cached.ids) {
-      playlist.songs.push(await this.getSongAsync(id));
-    }
-    return playlist;
   }
 
   private getUrlFromId(id: string): string {

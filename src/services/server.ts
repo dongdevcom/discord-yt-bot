@@ -10,7 +10,7 @@ import {
   entersState
 } from '@discordjs/voice';
 import { shuffle } from '@/utils';
-import { MusicService } from '@/services';
+import { MusicService, YoutubeService, SoundCloudService } from '@/services';
 
 export class Server {
   public guildId: string;
@@ -18,7 +18,7 @@ export class Server {
   public queue: IQueueItem[];
   public readonly voiceConnection: VoiceConnection;
   public readonly audioPlayer: AudioPlayer;
-  private musicService: MusicService = new MusicService();
+  private musicService: MusicService | null | undefined;
   private isReady = false;
 
   constructor(voiceConnection: VoiceConnection, guildId: string) {
@@ -99,7 +99,12 @@ export class Server {
     voiceConnection.subscribe(this.audioPlayer);
   }
 
-  public getMusicService(): MusicService {
+  public async getMusicService(): Promise<MusicService> {
+    if (!this.musicService) {
+      const youtubeService = await YoutubeService.create();
+      const soundCloudService = new SoundCloudService();
+      this.musicService = new MusicService(youtubeService, soundCloudService);
+    }
     return this.musicService;
   }
 
@@ -158,7 +163,8 @@ export class Server {
         return;
       }
       this.playing = this.queue.shift() as IQueueItem;
-      const audioResource = await this.musicService.createAudioResource(this.playing.song);
+      const service = await this.getMusicService();
+      const audioResource = await service.createAudioResource(this.playing.song);
       this.audioPlayer.play(audioResource);
     } catch (e) {
       console.error(e);
