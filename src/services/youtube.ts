@@ -4,7 +4,8 @@ import {
   Innertube,
   UniversalCache,
   Platform as InnertubePlatform,
-  Types
+  Types,
+  ClientType
 } from 'youtubei.js';
 import type { SabrPlaybackOptions } from 'googlevideo/sabr-stream';
 import { EnabledTrackTypes } from 'googlevideo/utils';
@@ -50,9 +51,11 @@ export class YoutubeService implements IMusicService {
     const cookie = await getCookie();
     const innertube = await Innertube.create({
       cookie,
-      cache: new UniversalCache(true)
+      cache: new UniversalCache(true),
+      client_type: ClientType.WEB,
+      player_id: '00c52fa0'
     });
-;
+
     const sabrService = new SabrService(innertube);
     return new YoutubeService(innertube, sabrService);
   }

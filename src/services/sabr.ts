@@ -21,7 +21,6 @@ export class SabrService {
       po_token: webPoTokenResult.poToken
     });
     const videoTitle = metadata.basic_info?.title || 'Unknown Video';
-    console.log(this.innertube.session.po_token);
 
     // Now get the streaming information.
     const serverAbrStreamingUrl = await this.innertube.session.player?.decipher(metadata.streaming_data?.server_abr_streaming_url);
