@@ -52,8 +52,7 @@ export class YoutubeService implements IMusicService {
     const innertube = await Innertube.create({
       cookie,
       cache: new UniversalCache(true),
-      client_type: ClientType.WEB,
-      player_id: '00c52fa0'
+      client_type: ClientType.WEB
     });
 
     const sabrService = new SabrService(innertube);
