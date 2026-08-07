@@ -4,8 +4,8 @@ import { Client, ChatInputCommandInteraction } from 'discord.js';
 export const ping = {
   name: 'ping',
   execute: async (
-    client: Client,
     interaction: ChatInputCommandInteraction,
+    client: Client
   ): Promise<void> => {
     await interaction.deferReply();
     interaction.followUp(

@@ -83,6 +83,10 @@ export const schema: ApplicationCommandData[] = [
     description: messages.leaveDescription,
   },
   {
+    name: 'wipe',
+    description: messages.wipeDescription,
+  },
+  {
     name: 'help',
     description: messages.helpDescription,
   }

@@ -10,12 +10,12 @@ export const messageEvent = (client: Client): void => {
     // deploy bot commands
     if (
       message.content.toLowerCase() === CMD_PREFLIX + 'deploy' &&
-      message.author.id === message.author.id
+      message.author.id === message.guild.ownerId
     ) {
       await deploy(message);
       return;
     }
-    if (message.author.id !== message.author.id) {
+    if (message.author.id !== message.guild.ownerId) {
       guildInviteFilter(client, message);
     }
   });
