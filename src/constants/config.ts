@@ -1,3 +1,5 @@
+import { config } from 'dotenv';
+config({ quiet: true, debug: process.env.DEBUG === 'true' });
 import { Colors } from 'discord.js';
 import { Platform } from '@/enums';
 import * as path from 'path';

@@ -5,7 +5,8 @@ import {
   UniversalCache,
   Platform as InnertubePlatform,
   Types,
-  ClientType
+  ClientType,
+  Log
 } from 'youtubei.js';
 import type { SabrPlaybackOptions } from 'googlevideo/sabr-stream';
 import { EnabledTrackTypes } from 'googlevideo/utils';
@@ -36,17 +37,7 @@ export class YoutubeService implements IMusicService {
   }
 
   static async create() {
-    InnertubePlatform.shim.eval = async (data: Types.BuildScriptResult, env: Record<string, Types.VMPrimative>) => {
-      const properties = [];
-      if (env.n) {
-        properties.push(`n: exportedVars.nFunction("${env.n}")`)
-      }
-      if (env.sig) {
-        properties.push(`sig: exportedVars.sigFunction("${env.sig}")`)
-      }
-      const code = `${data.output}\nreturn { ${properties.join(', ')} }`;
-      return new Function(code)();
-    };
+    InnertubePlatform.shim.eval = async (data: Types.BuildScriptResult) => new Function(data.output)();
 
     const cookie = await getCookie();
     const innertube = await Innertube.create({
@@ -54,6 +45,7 @@ export class YoutubeService implements IMusicService {
       cache: new UniversalCache(true),
       client_type: ClientType.WEB
     });
+    Log.setLevel(Log.Level.ERROR);
 
     const sabrService = new SabrService(innertube);
     return new YoutubeService(innertube, sabrService);

@@ -1,31 +1,19 @@
 {
-  "ts-node": {
-    "require": [
-      "tsconfig-paths/register"
-    ]
-  },
   "compilerOptions": {
     "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "esModuleInterop": true,
     "target": "ESNext",
     "noImplicitAny": true,
-    "moduleResolution": "nodenext",
     "strict": true,
     "sourceMap": false,
     "outDir": "dist",
     "rootDir": "src",
     "skipLibCheck": true,
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-    },
+      "@/*": ["./src/*"]
+    }
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "*/__tests__"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "**/tests"]
 }
