@@ -119,7 +119,7 @@ export class SabrService {
     };
   }
 
-  public async createSabrStream(videoId: string, options: SabrPlaybackOptions): Promise<IYoutubeStream> {
+  public async createSabrStream(videoId: string, options: Omit<SabrPlaybackOptions, 'isPostLiveDvr'>): Promise<IYoutubeStream> {
     const webPoTokenResult = await this.generateWebPoToken(videoId);
 
     // Get video metadata.
@@ -138,6 +138,7 @@ export class SabrService {
     const sabrFormats = metadata.streaming_data?.adaptive_formats.map(buildSabrFormat) || [];
 
     const serverAbrStream = new SabrStream({
+      videoId,
       formats: sabrFormats,
       serverAbrStreamingUrl,
       videoPlaybackUstreamerConfig,
@@ -145,24 +146,27 @@ export class SabrService {
       clientInfo: {
         clientName: parseInt(Constants.CLIENT_NAME_IDS[this.innertube.session.context.client.clientName as keyof typeof Constants.CLIENT_NAME_IDS]),
         clientVersion: this.innertube.session.context.client.clientVersion
+      },
+      callbacks: {
+        onReloadPlayerResponse: async () => {
+          const metadata = await this.innertube.getInfo(videoId, {
+            po_token: webPoTokenResult.poToken
+          });
+          const serverAbrStreamingUrl = await this.innertube.session.player?.decipher(metadata.streaming_data?.server_abr_streaming_url);
+          const videoPlaybackUstreamerConfig = metadata.player_config?.media_common_config.media_ustreamer_request_config?.video_playback_ustreamer_config;
+
+          if (!videoPlaybackUstreamerConfig) throw new Error('ustreamerConfig not found');
+          if (!serverAbrStreamingUrl) throw new Error('serverAbrStreamingUrl not found');
+
+          return { serverAbrStreamingUrl, videoPlaybackUstreamerConfig };
+        }
       }
     });
 
-    // Handle player response reload events (e.g, when IP changes, or formats expire).
-    serverAbrStream.on('reloadPlayerResponse', async (reloadPlaybackContext) => {
-      const metadata = await this.innertube.getInfo(videoId, {
-        po_token: webPoTokenResult.poToken
-      });
-      const serverAbrStreamingUrl = await this.innertube.session.player?.decipher(metadata.streaming_data?.server_abr_streaming_url);
-      const videoPlaybackUstreamerConfig = metadata.player_config?.media_common_config.media_ustreamer_request_config?.video_playback_ustreamer_config;
-
-      if (serverAbrStreamingUrl && videoPlaybackUstreamerConfig) {
-        serverAbrStream.setStreamingURL(serverAbrStreamingUrl);
-        serverAbrStream.setUstreamerConfig(videoPlaybackUstreamerConfig);
-      }
+    const { videoStream, audioStream, selectedFormats } = serverAbrStream.start({
+      ...options,
+      isPostLiveDvr: metadata.basic_info.is_post_live_dvr ?? false
     });
-
-    const { videoStream, audioStream, selectedFormats } = await serverAbrStream.start(options);
     return <IYoutubeStream>{
       videoStream,
       audioStream,

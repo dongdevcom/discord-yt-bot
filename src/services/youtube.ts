@@ -8,7 +8,6 @@ import {
   ClientType,
   Log
 } from 'youtubei.js';
-import type { SabrPlaybackOptions } from 'googlevideo/sabr-stream';
 import { EnabledTrackTypes } from 'googlevideo/utils';
 import { createAudioResource, AudioResource } from '@discordjs/voice';
 import { Platform } from '@/enums';
@@ -52,14 +51,13 @@ export class YoutubeService implements IMusicService {
   }
 
   public async createAudioResource(song: ISong): Promise<AudioResource> {
-    const options: SabrPlaybackOptions = {
-      preferWebM: true,
-      preferOpus: true,
-      audioQuality: 'AUDIO_QUALITY_MEDIUM',
+    const { audioStream, selectedFormats } = await this.sabrService.createSabrStream(song.id, {
+      audioPreferences: {
+        preferredAudioCodec: 'opus',
+        quality: 'AUDIO_QUALITY_MEDIUM'
+      },
       enabledTrackTypes: EnabledTrackTypes.AUDIO_ONLY
-    };
-
-    const { audioStream, selectedFormats } = await this.sabrService.createSabrStream(song.id, options);
+    });
 
     const nodeReadable = Readable.fromWeb(audioStream as NodeReadableStream);
     const inputType = detectAudioFormat(selectedFormats?.audioFormat?.mimeType);
